@@ -153,5 +153,6 @@ LSMinimumSystemVersion → 26.2
 
 ## Credits
 
+- [LIEF project](https://github.com/lief-project) for [LIEF](https://lief.re) used for Mach-O parsing
 - [@blacktop](https://github.com/blacktop) for [ipsw](https://github.com/blacktop/ipsw)
 - @marcan42 and [Asahi Linux](https://asahilinux.org) team for [Asahi Linux Installer](https://github.com/AsahiLinux/asahi-installer)
