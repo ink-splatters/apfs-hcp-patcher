@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "apfs-hcp-patcher"
 version = "0.1.0"
-description = "Patch APFS.kext to snapshot delta restore restriction for HCP volumes"
+description = "Patches APFS.kext to enable snapshot delta restores for HCP volumes"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
