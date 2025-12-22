@@ -151,6 +151,10 @@ LSMinimumSystemVersion → 26.2
   `/Library/Developer/KDKs/KDK_26.2_25C56.kdk`
 - proceed normally
 
+## License
+
+[MIT](./LICENSE)
+
 ## Credits
 
 - [LIEF project](https://github.com/lief-project) for [LIEF](https://lief.re) used for Mach-O parsing
