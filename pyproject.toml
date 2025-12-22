@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "apfs-hcp-patcher"
+version = "0.1.0"
+description = "Patch APFS.kext to snapshot delta restore restriction for HCP volumes"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Peter A.", email = "ink.splatters@pm.me" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.optional-dependencies]
+lief = [
+    "lief>=0.17.1",
+]
+
+[dependency-groups]
+dev = [
+    "poethepoet>=0.38.0",
+    "ruff>=0.14.10",
+    "ty>=0.0.5",
+]
+
+[project.scripts]
+apfs-hcp-patcher = "patcher:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.poe.tasks]
+typecheck = "ty"
+lint = ["ruff:check", "typecheck"]
+fix = ["ruff:format", "ruff:fix", "typecheck check"]
+# test = "pytest -q"
+
+[tool.poe.tasks."ruff:format"]
+cmd = "ruff format"
+
+[tool.poe.tasks."ruff:check"]
+cmd = "ruff check"
+
+[tool.poe.tasks."ruff:fix"]
+cmd = "ruff check --fix"
+
+[tool.poe]
+executor = { type = "uv" }
