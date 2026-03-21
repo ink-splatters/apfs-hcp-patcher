@@ -125,8 +125,9 @@ Solutions:
 
 ### Cannot find KDK for my macOS version
 
-- Download the KDK for OS with version, closest to yours
-- Don't run, [extract](https://stackoverflow.com/a/11299907) it instead
+- Run `sw_vers` and obtain `ProductVersion` and `BuildVersion`
+- Download available KDK with the version, closest to `sw_vers` output
+- Unpack the installer with `pkgutil --expand-full <pkg> <outputdir>`
 - patch the `kdk_contents/System/Library/CoreServices/SystemVersion.plist` keys listed below to match
   the the current system version, e.g.:
 
