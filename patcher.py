@@ -81,11 +81,16 @@ def find_pattern(mm: mmap.mmap, start: int = 0, end: int | None = None) -> int |
 
 def find_func(macho: Any, name: str) -> tuple[int, int] | None:
     """Find function by name and return (address, size)."""
-    syms = sorted(((s.value, s.name) for s in macho.symbols if s.value), key=lambda x: x[0])
-    for i, (addr, n) in enumerate(syms):
-        if n == name:
-            return addr, min((syms[i + 1][0] - addr) if i + 1 < len(syms) else 0x200, 0x400)
-    return None
+    addr = next(
+        (symbol.value for symbol in macho.symbols if symbol.value and symbol.name == name), None
+    )
+    if addr is None:
+        return None
+    next_addr = min(
+        (symbol.value for symbol in macho.symbols if addr < symbol.value),
+        default=addr + 0x200,
+    )
+    return addr, min(next_addr - addr, 0x400)
 
 
 def vaddr_to_off(macho: Any, vaddr: int) -> int | None:
@@ -116,7 +121,7 @@ def scan_for_patch(inp: str, macho: Any | None) -> tuple[int, int]:
                 if func:
                     vaddr, sz = func
                     off = vaddr_to_off(macho, vaddr)
-                    if off:
+                    if off is not None:
                         print(f"symbol: {FUNC_NAME} @ 0x{vaddr:x} [0x{off:x}]")
                         patch_off = find_pattern(mm, off, off + sz)
                 if patch_off is None:
