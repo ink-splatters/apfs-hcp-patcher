@@ -44,7 +44,6 @@ packages = ["."]
 typecheck = "ty"
 lint = ["ruff:check", "typecheck"]
 fix = ["ruff:format", "ruff:fix", "typecheck check"]
-# test = "pytest -q"
 
 [tool.poe.tasks."ruff:format"]
 cmd = "ruff format"
