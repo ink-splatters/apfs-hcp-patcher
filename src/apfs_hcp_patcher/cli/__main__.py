@@ -4,5 +4,5 @@ from __future__ import annotations
 
 from . import apfs_hcp_patcher
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     apfs_hcp_patcher()

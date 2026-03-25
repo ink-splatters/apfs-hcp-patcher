@@ -67,3 +67,9 @@ addopts = [
     "--cov-report=term-missing:skip-covered",
     "--cov-report=xml",
 ]
+
+[tool.coverage.run]
+omit = [
+    "src/apfs_hcp_patcher/cli/__init__.py",
+    "src/apfs_hcp_patcher/cli/__main__.py",
+]
