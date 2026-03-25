@@ -26,7 +26,6 @@ ______________________________________________________________________
 - Apple Silicon
 - [uv](https://docs.astral.sh/uv/)
 - [ipsw](https://github.com/blacktop/ipsw)
-- KDK (download from https://developer.apple.com for your system)
 
 ## How it works
 
@@ -41,54 +40,24 @@ ______________________________________________________________________
   ...
 ```
 
-_NOTE_: the addresses above are from the extracted APFS kext Mach-O on `macOS 26.2 (25C56)`
+_NOTE_: the addresses above are from the APFS fileset entry inside `kernelcache.decompressed` on `macOS 26.2 (25C56)`
 
 ## Usage
 
-### Patch
+### Patch `kernelcache.decompressed`
 
 NOTE: if you have multiple macOS installations, find the one currently running using `diskutil apfs listVolumeGroups`
 
 ```sh
 VGUUID=$(diskutil apfs listVolumeGroups -plist | xmllint --xpath "//key[text()='APFSVolumeGroupUUID']/following-sibling::string[1]/text()" -)
-SOC=$(uname -v | sed -E 's/^.+RELEASE_ARM64_(.+)$/\1/g')
 ipsw kernel dec /System/Volumes/Preboot/$VGUUID/boot/**/kernelcache -o .
-ipsw kernel extract kernelcache.decompressed com.apple.filesystems.apfs
-uvx --with lief "git+https://github.com/ink-splatters/apfs-hcp-patcher" com.apple.filesystems.apfs
+uvx "git+https://github.com/ink-splatters/apfs-hcp-patcher" kernelcache.decompressed
 ```
 
-### Build kernelcache
+This patches the `com.apple.filesystems.apfs` fileset entry inside the
+decompressed kernelcache and writes `kernelcache.decompressed.patched`.
 
-Locate installed KDK at `/Library/Developer/KDKs`, locate APFS kext bundle and replace the Mach-O with
-`com.apple.filesystems.apfs.patched` and create patched kernelcache:
-
-```sh
-sudo mkdir -p /Library/KernelCollections
-sudo /usr/bin/kmutil create \
-    -n boot \
-    -a arm64e \
-    -V release \
-    -B /Library/KernelCollections/kc.patched \
-    -k /System/Library/Kernels/kernel.release.$SOC \
-    -x $(kmutil inspect -V release --no-header | awk '{ print " -b "$1; }')
-```
-
-### Dumb Mode
-
-It's possible to patch `kernelcache.decompressed` directly and skip the [Build kernelcache](#build-kernelcache) section
-completely by using `--dumb` mode. The caveat is that, living up to its name, the tool in this mode doesn't reduce
-the patch scope to `_delta_restore_verify_compatibility` by properly parsing Mach-O, which may potentially result in
-invalid patching.
-
-On practice, however, the signature is sufficiently unique, meaning it should be safe.
-
-_WARNING_: use at your own risk!
-
-```sh
-uvx "git+https://github.com/ink-splatters/apfs-hcp-patcher" --dumb kernelcache.decompressed
-```
-
-### Install kernelcache
+### Install patched kernelcache
 
 Boot to 1TR (paired recovery OS):
 
@@ -99,7 +68,7 @@ Boot to 1TR (paired recovery OS):
 - Run:
 
 ```sh
-kmutil configure-boot --custom-boot-object <Data Volume>/Library/KernelCollections/kc.patched --compress --volume <System Volume mount>
+kmutil configure-boot --custom-boot-object <path>/kernelcache.decompressed.patched --compress --volume <System Volume mount>
 ```
 
 You will be warned that this operation will put your system in Permissive Security mode.
@@ -123,41 +92,11 @@ Solutions:
 - reinstall macOS
 - DIY: use [Asahi Linux Installer](https://github.com/AsahiLinux/asahi-installer/blob/main/src/stub.py) code which among other things, creates Recovery volume for their stub. Disclaimer: you are on your own. Do backups and hope for the best but get prepared for DFU restore.
 
-### Cannot find KDK for my macOS version
-
-- Run `sw_vers` and obtain `ProductVersion` and `BuildVersion`
-- Download available KDK with the version, closest to `sw_vers` output
-- Unpack the installer with `pkgutil --expand-full <pkg> <outputdir>`
-- patch the `kdk_contents/System/Library/CoreServices/SystemVersion.plist` keys listed below to match
-  the the current system version, e.g.:
-
-```
-ProductBuildVersion → 25C56
-ProductVersion → 26.2
-ProductUserVisibleVersion -> 26.2
-```
-
-- patch `kdk_contents/System/Library/Extensions/apfs.kext/Contents/Info.plist` keys listed below
-  to match the current system version, e.g.:
-
-```
-DTPlatformBuild → 25C56
-DTSDKBuild → 25C56
-DTPlatformVersion → 26.2
-DTSDKName -> macosx26.2.internal
-LSMinimumSystemVersion → 26.2
-```
-
-- put the KDK data to `/Library/Developer/KDKs/KDK_<macOS_version>_<macOS_build>.kdk`, e.g.:
-  `/Library/Developer/KDKs/KDK_26.2_25C56.kdk`
-- proceed normally
-
 ## License
 
 [MIT](./LICENSE)
 
 ## Credits
 
-- [LIEF project](https://github.com/lief-project) for [LIEF](https://lief.re) used for Mach-O parsing
 - [@blacktop](https://github.com/blacktop) for [ipsw](https://github.com/blacktop/ipsw)
 - @marcan42 and [Asahi Linux](https://asahilinux.org) team for [Asahi Linux Installer](https://github.com/AsahiLinux/asahi-installer)

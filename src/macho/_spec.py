@@ -1,0 +1,31 @@
+"""Low-level Mach-O constants and struct layouts."""
+
+from __future__ import annotations
+
+import struct
+
+U32_STRUCT = struct.Struct("<I")
+MACH_HEADER_64_STRUCT = struct.Struct("<IiiIIIII")
+LOAD_COMMAND_STRUCT = struct.Struct("<II")
+SEGMENT_COMMAND_64_STRUCT = struct.Struct("<II16sQQQQiiII")
+SYMTAB_COMMAND_STRUCT = struct.Struct("<IIIIII")
+FILESET_ENTRY_COMMAND_STRUCT = struct.Struct("<IIQQII")
+NLIST_64_STRUCT = struct.Struct("<IbbHQ")
+FAT_HEADER_STRUCT = struct.Struct(">II")
+FAT_ARCH_64_STRUCT = struct.Struct(">IIQQII")
+
+MACH_HEADER_SIZE = MACH_HEADER_64_STRUCT.size
+
+MH_MAGIC_64 = 0xFEEDFACF
+MH_FILESET = 0xC
+LC_SEGMENT_64 = 0x19
+LC_SYMTAB = 0x2
+LC_FILESET_ENTRY = 0x80000035
+
+FAT_MAGIC = 0xCAFEBABE
+FAT_CIGAM = 0xBEBAFECA
+FAT_MAGIC_64 = 0xCAFEBABF
+FAT_CIGAM_64 = 0xBFBAFECA
+
+CPU_TYPE_ARM64 = 0x0100000C
+CPU_SUBTYPE_ARM64E = 2

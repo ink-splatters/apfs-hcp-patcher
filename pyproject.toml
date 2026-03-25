@@ -21,29 +21,28 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-
-[project.optional-dependencies]
-lief = [
-    "lief>=0.17.1",
-]
-
 [dependency-groups]
 dev = [
     "poethepoet>=0.38.0",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
     "ruff>=0.14.10",
     "ty>=0.0.5",
 ]
 
+
 [project.scripts]
-apfs-hcp-patcher = "patcher:main"
+apfs-hcp-patcher = "apfs_hcp_patcher.cli:apfs_hcp_patcher"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+packages = ["src/apfs_hcp_patcher", "src/macho"]
 
 [tool.poe.tasks]
 typecheck = "ty"
 lint = ["ruff:check", "typecheck"]
 fix = ["ruff:format", "ruff:fix", "typecheck check"]
+test = "pytest -q"
 
 [tool.poe.tasks."ruff:format"]
 cmd = "ruff format"
@@ -56,3 +55,15 @@ cmd = "ruff check --fix"
 
 [tool.poe]
 executor = { type = "uv" }
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-v",
+    "--cov=apfs_hcp_patcher",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=xml",
+]
