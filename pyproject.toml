@@ -29,6 +29,7 @@ dev = [
     "pytest-mock>=3.15.1",
     "ruff>=0.14.10",
     "ty>=0.0.5",
+    "zizmor>=1.27.0",
 ]
 
 
@@ -43,6 +44,7 @@ typecheck = "ty"
 lint = ["ruff:check", "typecheck"]
 fix = ["ruff:format", "ruff:fix", "typecheck check"]
 test = "pytest -q"
+zizmor = "zizmor ."
 
 [tool.poe.tasks."ruff:format"]
 cmd = "ruff format"
