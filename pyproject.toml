@@ -44,7 +44,7 @@ typecheck = "ty"
 lint = ["ruff:check", "typecheck"]
 fix = ["ruff:format", "ruff:fix", "typecheck check"]
 test = "pytest -q"
-zizmor = "zizmor ."
+zizmor = "zizmor -p ."
 
 [tool.poe.tasks."ruff:format"]
 cmd = "ruff format"
