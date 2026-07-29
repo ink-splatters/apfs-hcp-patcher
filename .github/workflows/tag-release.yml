@@ -67,7 +67,7 @@ jobs:
         run: >-
           gh release create "$RELEASE_TAG" dist/*
           --repo "$GITHUB_REPOSITORY"
-          --title "Release $RELEASE_TAG"
+          --title "$RELEASE_TAG"
           --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
