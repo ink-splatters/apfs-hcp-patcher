@@ -15,8 +15,16 @@ env:
   RELEASE_TAG: ${{ github.ref_name }}
 
 jobs:
+  validate:
+    name: Validate release
+    permissions:
+      contents: read
+      security-events: write # Upload zizmor SARIF results
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: Build (sdist + wheel)
+    needs: [validate]
     runs-on: ubuntu-24.04
     permissions:
       contents: read

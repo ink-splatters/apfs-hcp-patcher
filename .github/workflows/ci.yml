@@ -7,11 +7,12 @@ on:
   pull_request:
     branches:
       - "**"
+  workflow_call:
 
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
