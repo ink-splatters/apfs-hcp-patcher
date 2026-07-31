@@ -11,7 +11,9 @@ from ._spec import (
     CPU_SUBTYPE_ARM64E,
     CPU_TYPE_ARM64,
     FAT_ARCH_64_STRUCT,
+    FAT_ARCH_STRUCT,
     FAT_HEADER_STRUCT,
+    FAT_MAGIC,
     FAT_MAGIC_64,
     FILESET_ENTRY_COMMAND_STRUCT,
     LC_FILESET_ENTRY,
@@ -132,16 +134,25 @@ def read_c_string(buf: ByteBuffer, start: int, limit: int) -> str:
 
 def find_fileset_entry(mm: ByteBuffer, entry_id: str) -> int:
     """Return the container file offset of a fileset entry."""
-    _, filetype, ncmds = _read_header(mm, 0)
+    _, filetype, ncmds, sizeofcmds = _read_header(mm, 0)
     if filetype != MH_FILESET:
         raise MachOError("input image is not an MH_FILESET Mach-O")
 
-    for load_offset, cmd, cmdsize in _iter_load_commands(mm, MACH_HEADER_SIZE, ncmds):
+    for load_offset, cmd, cmdsize in _iter_load_commands(
+        mm,
+        MACH_HEADER_SIZE,
+        ncmds,
+        sizeofcmds,
+        len(mm),
+    ):
         if cmd != LC_FILESET_ENTRY:
             continue
+        _require_command_size(cmdsize, FILESET_ENTRY_COMMAND_STRUCT.size, "LC_FILESET_ENTRY")
         _, _, _, fileoff, entry_id_offset, _ = FILESET_ENTRY_COMMAND_STRUCT.unpack_from(
             mm, load_offset
         )
+        if entry_id_offset < FILESET_ENTRY_COMMAND_STRUCT.size:
+            raise MachOError("invalid LC_FILESET_ENTRY identifier offset")
         string_offset = load_offset + entry_id_offset
         if load_offset <= string_offset < load_offset + cmdsize:
             identifier = read_c_string(mm, string_offset, load_offset + cmdsize)
@@ -162,17 +173,33 @@ def load_standalone_macho(mm: ByteBuffer) -> MachOContext:
         raise MachOError("input file is too small to be a Mach-O")
 
     magic = int.from_bytes(mm[:4], "big")
-    if magic == FAT_MAGIC_64:
-        return load_macho_context_from_image(mm, _find_arm64e_slice(mm))
+    if magic in {FAT_MAGIC, FAT_MAGIC_64}:
+        slice_offset, slice_size = _find_arm64_slice(mm, magic)
+        return load_macho_context_from_image(
+            mm,
+            slice_offset,
+            slice_size,
+            offsets_are_relative=True,
+        )
 
     return load_macho_context_from_image(mm, 0)
 
 
-def load_macho_context_from_image(mm: ByteBuffer, base_offset: int) -> MachOContext:
+def load_macho_context_from_image(
+    mm: ByteBuffer,
+    base_offset: int,
+    image_size: int | None = None,
+    *,
+    offsets_are_relative: bool = False,
+) -> MachOContext:
     """Load segment and symbol metadata from a thin Mach-O within a buffer."""
-    _, _, ncmds = _read_header(mm, base_offset)
+    image_end = len(mm) if image_size is None else base_offset + image_size
+    if image_end < base_offset or image_end > len(mm):
+        raise MachOError("Mach-O image exceeds input bounds")
 
-    segments: list[SegmentEntry] = []
+    _, _, ncmds, sizeofcmds = _read_header(mm, base_offset, image_end)
+
+    raw_segments: list[tuple[int, int, int, int]] = []
     symbol_values: list[int] = []
     symbol_by_name: dict[str, int] = {}
     symoff: int | None = None
@@ -181,8 +208,15 @@ def load_macho_context_from_image(mm: ByteBuffer, base_offset: int) -> MachOCont
     strsize: int | None = None
 
     command_offset = base_offset + MACH_HEADER_SIZE
-    for load_offset, cmd, _ in _iter_load_commands(mm, command_offset, ncmds):
+    for load_offset, cmd, cmdsize in _iter_load_commands(
+        mm,
+        command_offset,
+        ncmds,
+        sizeofcmds,
+        image_end,
+    ):
         if cmd == LC_SEGMENT_64:
+            _require_command_size(cmdsize, SEGMENT_COMMAND_64_STRUCT.size, "LC_SEGMENT_64")
             (
                 _,
                 _,
@@ -197,26 +231,43 @@ def load_macho_context_from_image(mm: ByteBuffer, base_offset: int) -> MachOCont
                 _,
             ) = SEGMENT_COMMAND_64_STRUCT.unpack_from(mm, load_offset)
             if vmsize > 0 and filesize > 0:
-                segments.append((vmaddr, vmaddr + vmsize, fileoff))
+                raw_segments.append((vmaddr, vmsize, fileoff, filesize))
         elif cmd == LC_SYMTAB:
+            _require_command_size(cmdsize, SYMTAB_COMMAND_STRUCT.size, "LC_SYMTAB")
             _, _, symoff, nsyms, stroff, strsize = SYMTAB_COMMAND_STRUCT.unpack_from(
                 mm, load_offset
             )
 
     fileoff_bias = (
-        base_offset if segments and min(fileoff for _, _, fileoff in segments) < base_offset else 0
+        base_offset
+        if offsets_are_relative
+        or (raw_segments and min(fileoff for _, _, fileoff, _ in raw_segments) < base_offset)
+        else 0
     )
     if fileoff_bias:
-        segments = [(start, end, fileoff + fileoff_bias) for start, end, fileoff in segments]
         if symoff is not None:
             symoff += fileoff_bias
         if stroff is not None:
             stroff += fileoff_bias
 
+    segments: list[SegmentEntry] = []
+    file_segments: list[SegmentEntry] = []
+    for vmaddr, vmsize, fileoff, filesize in raw_segments:
+        absolute_fileoff = fileoff + fileoff_bias
+        if absolute_fileoff < base_offset or absolute_fileoff + filesize > image_end:
+            raise MachOError("segment file range exceeds Mach-O image bounds")
+        segments.append((vmaddr, vmaddr + vmsize, absolute_fileoff))
+        file_segments.append((absolute_fileoff, absolute_fileoff + filesize, vmaddr))
+
     if symoff is not None and nsyms is not None and stroff is not None and strsize is not None:
         string_end = stroff + strsize
         symbol_end = symoff + nsyms * NLIST_64_STRUCT.size
-        if string_end > len(mm) or symbol_end > len(mm):
+        if (
+            symoff < base_offset
+            or stroff < base_offset
+            or string_end > image_end
+            or symbol_end > image_end
+        ):
             raise MachOError("symbol table exceeds input bounds")
 
         for index in range(nsyms):
@@ -234,46 +285,62 @@ def load_macho_context_from_image(mm: ByteBuffer, base_offset: int) -> MachOCont
         symbol_values=sorted(symbol_values),
         symbol_by_name=symbol_by_name,
         virtual_segments=segments,
-        file_segments=[
-            (fileoff, fileoff + (end - start), start) for start, end, fileoff in segments
-        ],
+        file_segments=file_segments,
     )
 
 
-def _find_arm64e_slice(mm: ByteBuffer) -> int:
+def _find_arm64_slice(mm: ByteBuffer, magic: int) -> tuple[int, int]:
     if len(mm) < FAT_HEADER_STRUCT.size:
         raise MachOError("input file is too small to be a FAT Mach-O")
 
-    magic, nfat_arch = FAT_HEADER_STRUCT.unpack_from(mm, 0)
-    if magic != FAT_MAGIC_64:
-        raise MachOError("input file is not a FAT64 Mach-O")
+    parsed_magic, nfat_arch = FAT_HEADER_STRUCT.unpack_from(mm, 0)
+    if parsed_magic != magic or magic not in {FAT_MAGIC, FAT_MAGIC_64}:
+        raise MachOError("input file is not a supported FAT Mach-O")
 
-    fallback: int | None = None
+    arch_struct = FAT_ARCH_64_STRUCT if magic == FAT_MAGIC_64 else FAT_ARCH_STRUCT
+    preferred: tuple[int, int] | None = None
+    fallback: tuple[int, int] | None = None
     offset = FAT_HEADER_STRUCT.size
     for _ in range(nfat_arch):
-        if offset + FAT_ARCH_64_STRUCT.size > len(mm):
+        if offset + arch_struct.size > len(mm):
             raise MachOError("truncated FAT architecture table")
-        cputype, cpusubtype, arch_offset, _, _, _ = FAT_ARCH_64_STRUCT.unpack_from(mm, offset)
+        arch = arch_struct.unpack_from(mm, offset)
+        cputype, cpusubtype, arch_offset, arch_size = arch[:4]
         if cputype == CPU_TYPE_ARM64:
             if (cpusubtype & 0x00FFFFFF) == CPU_SUBTYPE_ARM64E:
-                return arch_offset
-            if fallback is None:
-                fallback = arch_offset
-        offset += FAT_ARCH_64_STRUCT.size
+                preferred = (arch_offset, arch_size)
+            elif fallback is None:
+                fallback = (arch_offset, arch_size)
+        offset += arch_struct.size
 
-    if fallback is None:
+    selected = preferred or fallback
+    if selected is None:
         raise MachOError("failed to find arm64 or arm64e slice in FAT Mach-O")
-    return fallback
+    slice_offset, slice_size = selected
+    if (
+        slice_offset < offset
+        or slice_size < MACH_HEADER_SIZE
+        or slice_offset + slice_size > len(mm)
+    ):
+        raise MachOError("selected FAT slice exceeds input bounds")
+    return selected
 
 
 def _parse_image_layout(buf: bytes, base_offset: int) -> tuple[int, list[SegmentEntry]]:
-    _, filetype, ncmds = _read_header(buf, base_offset)
+    _, filetype, ncmds, sizeofcmds = _read_header(buf, base_offset)
     segments: list[SegmentEntry] = []
 
     command_offset = base_offset + MACH_HEADER_SIZE
-    for load_offset, cmd, _ in _iter_load_commands(buf, command_offset, ncmds):
+    for load_offset, cmd, cmdsize in _iter_load_commands(
+        buf,
+        command_offset,
+        ncmds,
+        sizeofcmds,
+        len(buf),
+    ):
         if cmd != LC_SEGMENT_64:
             continue
+        _require_command_size(cmdsize, SEGMENT_COMMAND_64_STRUCT.size, "LC_SEGMENT_64")
         (
             _,
             _,
@@ -293,28 +360,50 @@ def _parse_image_layout(buf: bytes, base_offset: int) -> tuple[int, list[Segment
     return filetype, segments
 
 
-def _read_header(buf: ByteBuffer, base_offset: int) -> tuple[int, int, int]:
-    if base_offset < 0 or base_offset + MACH_HEADER_SIZE > len(buf):
+def _read_header(
+    buf: ByteBuffer,
+    base_offset: int,
+    image_end: int | None = None,
+) -> tuple[int, int, int, int]:
+    limit = len(buf) if image_end is None else image_end
+    if base_offset < 0 or base_offset + MACH_HEADER_SIZE > limit:
         raise MachOError("truncated Mach-O header")
-    magic, _, _, filetype, ncmds, _, _, _ = MACH_HEADER_64_STRUCT.unpack_from(buf, base_offset)
+    magic, _, _, filetype, ncmds, sizeofcmds, _, _ = MACH_HEADER_64_STRUCT.unpack_from(
+        buf,
+        base_offset,
+    )
     if magic != MH_MAGIC_64:
         raise MachOError("input file is not a thin 64-bit Mach-O")
-    return magic, filetype, ncmds
+    if sizeofcmds > limit - base_offset - MACH_HEADER_SIZE:
+        raise MachOError("Mach-O load command table exceeds image bounds")
+    return magic, filetype, ncmds, sizeofcmds
 
 
 def _iter_load_commands(
     buf: ByteBuffer,
     offset: int,
     ncmds: int,
+    sizeofcmds: int,
+    image_end: int,
 ) -> list[tuple[int, int, int]]:
     commands: list[tuple[int, int, int]] = []
     load_offset = offset
+    command_end = offset + sizeofcmds
+    if command_end > image_end:
+        raise MachOError("Mach-O load command table exceeds image bounds")
     for _ in range(ncmds):
-        if load_offset + LOAD_COMMAND_STRUCT.size > len(buf):
+        if load_offset + LOAD_COMMAND_STRUCT.size > command_end:
             raise MachOError("truncated Mach-O load command table")
         cmd, cmdsize = LOAD_COMMAND_STRUCT.unpack_from(buf, load_offset)
-        if cmdsize < LOAD_COMMAND_STRUCT.size or load_offset + cmdsize > len(buf):
+        if cmdsize < LOAD_COMMAND_STRUCT.size or load_offset + cmdsize > command_end:
             raise MachOError("invalid Mach-O load command size")
         commands.append((load_offset, cmd, cmdsize))
         load_offset += cmdsize
+    if load_offset != command_end:
+        raise MachOError("Mach-O load command count does not match command table size")
     return commands
+
+
+def _require_command_size(cmdsize: int, minimum: int, command_name: str) -> None:
+    if cmdsize < minimum:
+        raise MachOError(f"{command_name} command is too small")

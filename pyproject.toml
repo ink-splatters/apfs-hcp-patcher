@@ -67,6 +67,7 @@ addopts = [
     "--strict-config",
     "-v",
     "--cov=apfs_hcp_patcher",
+    "--cov=macho",
     "--cov-report=term-missing:skip-covered",
     "--cov-report=xml",
 ]

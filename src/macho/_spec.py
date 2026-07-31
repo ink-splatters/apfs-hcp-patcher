@@ -12,6 +12,7 @@ SYMTAB_COMMAND_STRUCT = struct.Struct("<IIIIII")
 FILESET_ENTRY_COMMAND_STRUCT = struct.Struct("<IIQQII")
 NLIST_64_STRUCT = struct.Struct("<IbbHQ")
 FAT_HEADER_STRUCT = struct.Struct(">II")
+FAT_ARCH_STRUCT = struct.Struct(">IIIII")
 FAT_ARCH_64_STRUCT = struct.Struct(">IIQQII")
 
 MACH_HEADER_SIZE = MACH_HEADER_64_STRUCT.size
