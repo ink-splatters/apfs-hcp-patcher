@@ -29,7 +29,7 @@ select = [
 
   # Code quality from upgrade/pyproject.toml
   "E",   # pycodestyle errors
-  "W",   # pycodestyle warnings
+  "W",   # pycodestyle warnings  
   "F",   # pyflakes
   "I",   # isort - import sorting
   "N",   # pep8-naming
@@ -62,6 +62,8 @@ ignore = [
   "B008",   # do not perform function calls in argument defaults
   "N818",   # exception name should be named with an Error suffix
   "COM812", # trailing comma missing (handled by formatter)
+  "S101",   # security issues
+  "PT011",  # pytest-style
 
   # Avoid conflicts with modernization goals
   "T201", # print found (keep prints for now)
