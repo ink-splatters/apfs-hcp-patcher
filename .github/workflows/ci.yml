@@ -7,18 +7,16 @@ on:
   pull_request:
     branches:
       - "**"
-  workflow_call:
 
 permissions: {}
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   checks:
     name: Checks
-    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -38,13 +36,13 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       - name: Sync dependencies
-        run: uv sync --all-extras
+        run: uv sync --locked
 
-      - name: Run fix
-        run: uv run poe fix
+      - name: Run checks
+        run: uv run --locked poe check
 
       - name: Run tests
-        run: uv run poe test
+        run: uv run --locked poe test
 
   zizmor:
     name: zizmor
