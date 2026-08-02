@@ -12,7 +12,8 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # github.workflow names the caller during workflow_call; keep this group distinct.
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
