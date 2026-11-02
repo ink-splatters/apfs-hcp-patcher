@@ -3,6 +3,8 @@ updates:
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: daily
+      time: "08:00"
+      timezone: Etc/UTC
     cooldown:
       default-days: 7
